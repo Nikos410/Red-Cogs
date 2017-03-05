@@ -8,6 +8,7 @@ import asyncio
 
 
 default_greeting = "Welcome {0.name} to {1.name}!"
+default_leavemsg = "{0.name} left the {1.name}!"
 default_settings = {"GREETING": default_greeting, "ON": False, "CHANNEL": None, "WHISPER" : False}
 
 class Welcome:
@@ -31,6 +32,7 @@ class Welcome:
             await send_cmd_help(ctx)
             msg = "```"
             msg += "GREETING: {}\n".format(self.settings[server.id]["GREETING"])
+            msg += "LEAVE_MSG: {}\n".format(self.settings[server.id]["LEAVE_MSG"])
             msg += "CHANNEL: #{}\n".format(self.get_welcome_channel(server)) 
             msg += "ON: {}\n".format(self.settings[server.id]["ON"]) 
             msg += "WHISPER: {}\n".format(self.settings[server.id]["WHISPER"])
@@ -58,11 +60,39 @@ class Welcome:
         await self.send_testing_msg(ctx)
 
     @welcomeset.command(pass_context=True)
-    async def toggle(self, ctx):
+    async def leavemsg(self, ctx, *, format_msg):
+        """Sets the leave message format for the server.
+
+        {0} is user
+        {1} is server
+
+        Example formats:
+            {0.mention}.. Why did you go?
+        """
+        server = ctx.message.server
+        self.settings[server.id]["LEAVE_MSG"] = format_msg
+        fileIO("data/welcome/settings.json","save",self.settings)
+        await self.bot.say("Leave message set for the server.")
+        await self.send_testing_msg(ctx)
+
+    @welcomeset.command(pass_context=True)
+    async def toggle_welcome(self, ctx):
         """Turns on/off welcoming new users to the server"""
         server = ctx.message.server
-        self.settings[server.id]["ON"] = not self.settings[server.id]["ON"]
-        if self.settings[server.id]["ON"]:
+        self.settings[server.id]["WELCOME_ON"] = not self.settings[server.id]["WELCOME_ON"]
+        if self.settings[server.id]["WELCOME_ON"]:
+            await self.bot.say("I will now welcome new users to the server.")
+            await self.send_testing_msg(ctx)
+        else:
+            await self.bot.say("I will no longer welcome new users.")
+        fileIO("data/welcome/settings.json", "save", self.settings)
+
+    @welcomeset.command(pass_context=True)
+    async def toggle_leave(self, ctx):
+        """Turns on/off leave message"""
+        server = ctx.message.server
+        self.settings[server.id]["LEAVE_ON"] = not self.settings[server.id]["LEAVE_ON"]
+        if self.settings[server.id]["LEAVE_ON"]:
             await self.bot.say("I will now welcome new users to the server.")
             await self.send_testing_msg(ctx)
         else:
@@ -140,6 +170,30 @@ class Welcome:
             print("Bot doesn't have permissions to send messages to {0.name}'s #{1.name} channel".format(server,channel))
 
 
+    async def member_leave(self, member):
+        server = member.server
+        if server.id not in self.settings:
+            self.settings[server.id] = default_settings
+            self.settings[server.id]["CHANNEL"] = server.default_channel.id
+            fileIO("data/welcome/settings.json","save",self.settings)
+        if not self.settings[server.id]["ON"]:
+            return
+        if server == None:
+            print("Server is None. Private Message or some new fangled Discord thing?.. Anyways there be an error, the user was {}".format(member.name))
+            return
+        channel = self.get_welcome_channel(server)
+        if channel is None:
+            print('welcome.py: Channel not found. It was most likely deleted. User joined: {}'.format(member.name))
+            return
+        if self.settings[server.id]["WHISPER"]:
+            await self.bot.send_message(member, self.settings[server.id]["LEAVE_MSG"].format(member, server))
+        if self.settings[server.id]["WHISPER"] != True and self.speak_permissions(server):
+            await self.bot.send_message(channel, self.settings[server.id]["LEAVE_MSG"].format(member, server))
+        else:
+            print("Permissions Error. User that joined: {0.name}".format(member))
+            print("Bot doesn't have permissions to send messages to {0.name}'s #{1.name} channel".format(server,channel))
+
+
     def get_welcome_channel(self, server):
         try:
             return server.get_channel(self.settings[server.id]["CHANNEL"])
@@ -162,8 +216,10 @@ class Welcome:
         if self.speak_permissions(server):
             if self.settings[server.id]["WHISPER"]:
                 await self.bot.send_message(ctx.message.author, self.settings[server.id]["GREETING"].format(ctx.message.author,server))
+                await self.bot.send_message(ctx.message.author, self.settings[server.id]["LEAVE_MSG"].format(ctx.message.author,server))
             if self.settings[server.id]["WHISPER"] != True:
                 await self.bot.send_message(channel, self.settings[server.id]["GREETING"].format(ctx.message.author,server))
+                await self.bot.send_message(channel, self.settings[server.id]["LEAVE_MSG"].format(ctx.message.author,server))
         else: 
             await self.bot.send_message(ctx.message.channel,"I do not have permissions to send messages to {0.mention}".format(channel))
         
@@ -193,4 +249,5 @@ def setup(bot):
     check_files()
     n = Welcome(bot)
     bot.add_listener(n.member_join,"on_member_join")
+    bot.add_listener(n.member_leave,"on_member_remove")
     bot.add_cog(n)
