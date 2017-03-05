@@ -9,7 +9,7 @@ import asyncio
 
 default_greeting = "Welcome {0.name} to {1.name}!"
 default_leavemsg = "{0.name} left the {1.name}!"
-default_settings = {"GREETING": default_greeting, "ON": False, "CHANNEL": None, "WHISPER" : False}
+default_settings = {"GREETING": default_greeting, "LEAVE_MSG": default_leavemsg, "WELCOME_ON": False, "LEAVE_ON": False, "CHANNEL": None, "WHISPER" : False}
 
 class Welcome:
     """Welcomes new members to the server in the default channel"""
@@ -34,7 +34,8 @@ class Welcome:
             msg += "GREETING: {}\n".format(self.settings[server.id]["GREETING"])
             msg += "LEAVE_MSG: {}\n".format(self.settings[server.id]["LEAVE_MSG"])
             msg += "CHANNEL: #{}\n".format(self.get_welcome_channel(server)) 
-            msg += "ON: {}\n".format(self.settings[server.id]["ON"]) 
+            msg += "WELCOME_ON: {}\n".format(self.settings[server.id]["WELCOME_ON"]) 
+            msg += "LEAVE_ON: {}\n".format(self.settings[server.id]["LEAVE_ON"])
             msg += "WHISPER: {}\n".format(self.settings[server.id]["WHISPER"])
             msg += "```"
             await self.bot.say(msg)
